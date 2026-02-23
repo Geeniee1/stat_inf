@@ -1,0 +1,176 @@
+RSTUDIO PROJECT CHEAT SHEET (Data collection + description + 2 statistical tests)
+
+0) Recommended project structure
+  project/
+    data_raw/                 raw collected data (never overwrite)
+    data_clean/               cleaned datasets (csv)
+    R/                        reusable functions (cleaning, plots, tests)
+    outputs/
+      figures/                png/pdf plots
+      tables/                 csv/tex tables
+    report/                   .Rmd or Quarto file
+    README.md                 what you did + how to run
+
+1) RStudio setup and daily workflow
+  Create project: File > New Project > Existing Directory (or New Directory)
+  Use scripts: File > New File > R Script (analysis.R, cleaning.R, plots.R)
+  Use R Markdown: File > New File > R Markdown (report.Rmd)
+  Working directory: use Projects, avoid setwd() in scripts
+  Restart R: Session > Restart R
+  Install packages once:
+    install.packages(c("tidyverse","lubridate","janitor","broom","here","skimr","ggpubr"))
+  Load packages each session:
+    library(tidyverse); library(lubridate); library(janitor); library(broom); library(here)
+
+2) Reproducibility essentials
+  Seed for randomness (only if you simulate):
+    set.seed(123)
+  Never edit raw data files. Save cleaned data separately.
+  Use here() for file paths:
+    readr::read_csv(here("data_raw","file.csv"))
+    readr::write_csv(df, here("data_clean","df_clean.csv"))
+  Record decisions:
+    keep a short data dictionary: column name, unit, meaning, allowed values
+
+3) Data collection patterns (choose one)
+  A) Manual observations (Västtrafik delays)
+    Collect: planned_time, actual_arrival, line, mode (bus/tram), date, time_of_day, rush (0/1)
+    Tip: log in a consistent format (ISO date time). One row per departure.
+
+  B) Store price basket (Willys vs Hemköp)
+    Collect: item_id, item_name, chain, store, date, price_sek, size_g_ml, organic (0/1)
+    Tip: same item_id across chains for paired comparisons. One row per item per store.
+
+  C) Surveys
+    Collect: respondent_id, age_group, category answers (Likert), etc.
+    Tip: export csv, do not change the export manually. Clean in R.
+
+4) Import, clean, validate (typical commands)
+  Import:
+    df_raw <- readr::read_csv(here("data_raw","mydata.csv"))
+  Clean column names:
+    df <- janitor::clean_names(df_raw)
+  Convert types:
+    df <- df |>
+      mutate(date = as.Date(date),
+             planned_time = lubridate::ymd_hms(planned_time),
+             actual_time = lubridate::ymd_hms(actual_time))
+  Create derived variables:
+    df <- df |>
+      mutate(delay_min = as.numeric(difftime(actual_time, planned_time, units="mins")),
+             late_3min = delay_min > 3)
+  Basic validation checks:
+    summary(df)
+    anyNA(df)
+    dplyr::count(df, mode)
+    stopifnot(all(df$delay_min > -60 & df$delay_min < 180, na.rm=TRUE))
+
+5) Descriptive statistics (minimum requirements)
+  Quick overview:
+    skimr::skim(df)
+  Group summaries:
+    df |>
+      group_by(mode) |>
+      summarise(n = n(),
+                mean_delay = mean(delay_min, na.rm=TRUE),
+                sd_delay = sd(delay_min, na.rm=TRUE),
+                median_delay = median(delay_min, na.rm=TRUE),
+                iqr_delay = IQR(delay_min, na.rm=TRUE))
+
+6) Plots (ggplot2 patterns)
+  Histogram / density:
+    ggplot(df, aes(delay_min)) + geom_histogram() + theme_minimal()
+  Boxplot by group:
+    ggplot(df, aes(mode, delay_min)) + geom_boxplot() + theme_minimal()
+  Bar plot of proportions (late vs on time):
+    df |>
+      count(mode, late_3min) |>
+      group_by(mode) |>
+      mutate(prop = n / sum(n)) |>
+      ggplot(aes(mode, prop, fill = late_3min)) + geom_col() + theme_minimal()
+
+  Save plot:
+    ggsave(here("outputs","figures","box_delay_by_mode.png"), width=7, height=4)
+
+7) Statistical tests (choose two, aligned with hypothesis)
+  A) Two sample t test (bus vs tram mean delay)
+    t.test(delay_min ~ mode, data=df, var.equal=FALSE)   # Welch t test default
+    Report: t, df, p, mean difference, CI
+
+  Assumptions to check:
+    independence by design (different departures)
+    approximate normality (hist, QQ plot) or rely on CLT if n large
+    unequal variances -> Welch is fine
+
+  B) Chi square test (late proportions differ by mode)
+    tab <- table(df$mode, df$late_3min)
+    chisq.test(tab)           # expects adequate expected counts
+    If expected counts small:
+      fisher.test(tab)
+
+  C) Paired t test (same items, two stores)
+    df_wide <- df |>
+      select(item_id, chain, price_sek) |>
+      tidyr::pivot_wider(names_from=chain, values_from=price_sek)
+    t.test(df_wide$Willys, df_wide$Hemkop, paired=TRUE)
+
+  D) Regression (predict price or delay)
+    model <- lm(price_sek ~ size_g_ml + organic + chain, data=df)
+    summary(model)
+    broom::tidy(model)
+    plot(model)               # residual diagnostics
+
+8) Effect size and confidence intervals (stronger report)
+  Mean difference CI from t test is already provided.
+  Cohen’s d (manual quick idea):
+    d = (mean1 - mean2) / pooled_sd
+  For proportions difference:
+    report risk difference or odds ratio (optional).
+
+9) Writing the research report (Rmd skeleton)
+  Sections to include:
+    Title + research question + hypothesis (H0/H1)
+    Data collection method (how, where, when, sample size, inclusion rules)
+    Variables + units + how derived (delay_min, late_3min, basket_total, etc.)
+    Descriptive stats + plots (at least 2 plots)
+    Test 1: method, assumptions, results, interpretation
+    Test 2: method, assumptions, results, interpretation
+    Limitations (sampling bias, measurement error, confounding, independence)
+    Conclusion + what you would do next
+
+  R Markdown workflow:
+    Knit to PDF/HTML: "Knit" button
+    Use code chunks with set.seed if simulating
+    Keep output objects: save tables as csv, figures as png
+
+10) Common mistakes to avoid
+  Mixing up independence: repeated measures on same item or same route needs paired or clustered approach.
+  p value fishing: decide hypothesis and tests before looking at results.
+  Units confusion: minutes vs seconds, grams vs kg.
+  Editing raw data in Excel: do not. Clean in R.
+  Using too small sample sizes for chi square: use Fisher if needed.
+
+11) Quick templates for the two example projects
+
+  Västtrafik delays
+    Data columns (minimum):
+      date_time, mode (bus/tram), line, planned_time, actual_time, rush (0/1)
+    Derived:
+      delay_min, late_3min
+    Tests:
+      Welch two sample t test on delay_min by mode
+      Chi square (or Fisher) on mode x late_3min
+
+  Store basket prices
+    Data columns (minimum):
+      item_id, item_name, chain, store, date, price_sek, size_g_ml, organic (0/1)
+    Derived:
+      price_per_unit = price_sek / size_g_ml
+    Tests:
+      Paired t test on matched items across chains
+      Regression of price_per_unit on organic + chain + size_g_ml
+
+12) Minimal package set for most student projects
+  tidyverse, lubridate, janitor, broom, here, skimr
+
+If you want, paste your draft research question and what you can realistically collect in 1 to 2 days, and I will convert it into: variable list, data template (csv header), and the exact two tests you should run.

@@ -1,0 +1,76 @@
+git cheat sheet
+
+GIT CHEAT SHEET (RStudio Terminal, macOS)
+
+Basics
+  pwd                         show current folder
+  ls                          list files
+  git --version               confirm git installed
+  git status                  what changed, what is staged, what branch
+
+Create or connect repo
+  git init                    start git in current folder (creates .git)
+  git remote -v               show remotes
+  git remote add origin <URL> add GitHub remote
+  git remote set-url origin <URL> change remote URL
+  git branch -M main          rename current branch to main
+
+Stage, commit, push
+  git add .                   stage all changes
+  git add <file>              stage one file
+  git restore --staged <file> unstage file (keep edits)
+  git commit -m "msg"         commit staged changes locally
+  git log --oneline --decorate -n 10   recent commits
+  git push -u origin main     push main first time
+  git push                    push current branch after -u set
+
+Pull, fetch
+  git pull                    fetch + merge from remote
+  git fetch                   download remote updates without merging
+  git pull --rebase           fetch + rebase (linear history)
+
+Branches
+  git branch                  list local branches
+  git branch -a               list local + remote branches
+  git checkout -b <name>      create and switch to new branch
+  git checkout <name>         switch branches
+  git switch -c <name>        same as checkout -b (newer syntax)
+  git merge <branch>          merge <branch> into current branch
+
+Rebase (use on your own unshared commits)
+  git rebase main             replay current branch commits onto main
+  git rebase --continue       continue after fixing conflicts
+  git rebase --abort          abort rebase and go back
+
+Conflicts
+  git status                  see conflicted files
+  (edit files to resolve)
+  git add <file>              mark resolved
+  git commit                  finish merge (if merging)
+  git rebase --continue       finish rebase (if rebasing)
+
+Undo / safety
+  git restore <file>          discard local uncommitted changes to file
+  git restore .               discard all uncommitted changes (danger)
+  git reset --soft HEAD~1     undo last commit, keep changes staged
+  git reset --mixed HEAD~1    undo last commit, keep changes unstaged
+  git reset --hard HEAD~1     undo last commit and discard changes (danger)
+  git stash                   save uncommitted changes temporarily
+  git stash pop               reapply stashed changes
+
+First push of a new branch (for PR)
+  git push -u origin <branch>
+
+Force push (only if you rebased)
+  git push --force-with-lease
+
+Useful one liners
+  git diff                    changes not staged
+  git diff --staged           changes staged for commit
+
+Suggested .gitignore for R projects
+  .Rproj.user/
+  .Rhistory
+  .RData
+  .Ruserdata
+  .DS_Store
