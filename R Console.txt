@@ -1,0 +1,142 @@
+> # Ladda paket
+> library(httr)
+> library(jsonlite)
+> 
+> # 1. Dina inloggningsuppgifter
+> client_key <- "rV6QsH53lFZASpWzaEsPLrt7XOMa"
+> client_secret <- "GqjAfxzlOSY8ogum59vArP1u8w8a"
+> 
+> # 2. Inställningar
+> chalmers_gid <- "9021014001960000"
+> url_departures <- paste0("https://ext-api.vasttrafik.se/pr/v4/stop-areas/", chalmers_gid, "/departures")
+> url_token <- "https://ext-api.vasttrafik.se/token"
+> 
+> antal_timmar <- 3 
+> loopar <- antal_timmar * 12 # 12 anrop per timme
+> 
+> skapa_fil <- TRUE
+> print(paste("Startar helt automatiserad datainsamling i", antal_timmar, "timmar..."))
+[1] "Startar helt automatiserad datainsamling i 3 timmar..."
+> 
+> for (i in 1:loopar) {
++   
++   # -- STEG A: Hämta Token --
++   token_response <- POST(
++     url_token,
++     authenticate(client_key, client_secret, type = "basic"),
++     body = list(grant_type = "client_credentials"),
++     encode = "form"
++   )
++   
++   if (status_code(token_response) == 200) {
++     token_data <- fromJSON(content(token_response, as = "text", encoding = "UTF-8"))
++     my_token <- token_data$access_token
++   } else {
++     Sys.sleep(300)
++     next 
++   }
++   
++   # -- STEG B: Hämta Data --
++   response <- GET(url_departures, add_headers(Authorization = paste("Bearer", my_token)))
++   
++   if (status_code(response) == 200) {
++     json_data <- fromJSON(content(response, as = "text", encoding = "UTF-8"))
++     data <- json_data$results
++     
++     # Kolla att vi faktiskt fick tillbaka avgångar
++     if (!is.null(data) && nrow(data) > 0) {
++       
++       antal_rader <- nrow(data)
++       
++       # --- SÄKER TABELLBYGGNATION ---
++       df <- data.frame(
++         Loggningstid = rep(format(Sys.time(), "%Y-%m-%d %H:%M:%S"), antal_rader),
++         stringsAsFactors = FALSE
++       )
++       
++       # FIX: Plocka ut Linje från rätt ställe i Västtrafiks v4-API
++       if ("serviceJourney" %in% names(data)) {
++         linje_data <- data$serviceJourney$line
++         if ("designation" %in% names(linje_data)) {
++           df$Linje <- linje_data$designation
++         } else if ("shortName" %in% names(linje_data)) {
++           df$Linje <- linje_data$shortName
++         } else {
++           df$Linje <- rep("Okänd", antal_rader)
++         }
++       } else {
++         df$Linje <- rep("Okänd", antal_rader)
++       }
++       
++       # Kategori
++       df$Transportslag <- ifelse(df$Linje == "16", "Buss", "Spårvagn")
++       
++       # Plocka ut Planerad tid
++       if ("plannedTime" %in% names(data)) {
++         df$Planerad <- data$plannedTime
++       } else {
++         df$Planerad <- rep(NA, antal_rader)
++       }
++       
++       # Plocka ut Faktisk tid
++       if ("estimatedTime" %in% names(data) && length(data$estimatedTime) == antal_rader) {
++         df$Faktisk <- ifelse(is.na(data$estimatedTime), df$Planerad, data$estimatedTime)
++       } else {
++         df$Faktisk <- df$Planerad 
++       }
++       # ------------------------------
++       
++       # Spara till fil
++       write.table(df, file = "vasttrafik_data.csv", sep = ",", 
++                   append = !skapa_fil, col.names = skapa_fil, row.names = FALSE)
++       skapa_fil <- FALSE
++       
++       print(paste("Mätning", i, "av", loopar, "sparad kl:", format(Sys.time(), "%H:%M:%S")))
++     }
++   }
++   
++   # -- STEG C: Vänta 5 minuter --
++   if (i < loopar) {
++     Sys.sleep(300)
++   }
++ }
+[1] "Mätning 1 av 36 sparad kl: 16:46:39"
+[1] "Mätning 2 av 36 sparad kl: 16:51:39"
+[1] "Mätning 3 av 36 sparad kl: 16:56:40"
+[1] "Mätning 4 av 36 sparad kl: 17:01:40"
+[1] "Mätning 5 av 36 sparad kl: 17:06:40"
+[1] "Mätning 6 av 36 sparad kl: 17:11:40"
+[1] "Mätning 7 av 36 sparad kl: 17:16:41"
+[1] "Mätning 8 av 36 sparad kl: 17:21:41"
+[1] "Mätning 9 av 36 sparad kl: 17:26:41"
+[1] "Mätning 10 av 36 sparad kl: 17:31:42"
+[1] "Mätning 11 av 36 sparad kl: 17:36:42"
+[1] "Mätning 12 av 36 sparad kl: 17:41:43"
+[1] "Mätning 13 av 36 sparad kl: 17:46:43"
+[1] "Mätning 14 av 36 sparad kl: 17:51:43"
+[1] "Mätning 15 av 36 sparad kl: 17:56:44"
+[1] "Mätning 16 av 36 sparad kl: 18:01:44"
+[1] "Mätning 17 av 36 sparad kl: 18:06:44"
+[1] "Mätning 18 av 36 sparad kl: 18:11:45"
+[1] "Mätning 19 av 36 sparad kl: 18:16:45"
+[1] "Mätning 20 av 36 sparad kl: 18:21:45"
+[1] "Mätning 21 av 36 sparad kl: 18:26:45"
+[1] "Mätning 22 av 36 sparad kl: 18:31:46"
+[1] "Mätning 23 av 36 sparad kl: 18:36:46"
+[1] "Mätning 24 av 36 sparad kl: 18:41:47"
+[1] "Mätning 25 av 36 sparad kl: 18:46:47"
+[1] "Mätning 26 av 36 sparad kl: 18:51:47"
+[1] "Mätning 27 av 36 sparad kl: 18:56:48"
+[1] "Mätning 28 av 36 sparad kl: 19:01:48"
+[1] "Mätning 29 av 36 sparad kl: 19:06:49"
+[1] "Mätning 30 av 36 sparad kl: 19:11:49"
+[1] "Mätning 31 av 36 sparad kl: 19:16:49"
+[1] "Mätning 32 av 36 sparad kl: 19:21:49"
+[1] "Mätning 33 av 36 sparad kl: 19:26:50"
+[1] "Mätning 34 av 36 sparad kl: 19:31:50"
+[1] "Mätning 35 av 36 sparad kl: 19:36:50"
+[1] "Mätning 36 av 36 sparad kl: 19:41:51"
+> 
+> print("Insamling färdig! Kolla mappen efter vasttrafik_data.csv")
+[1] "Insamling färdig! Kolla mappen efter vasttrafik_data.csv"
+> 
