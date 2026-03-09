@@ -2,3 +2,14 @@
 .Rhistory
 .RData
 .Ruserdata
+
+# Python
+python_code/.venv/
+python_code/__pycache__/
+python_code/*.pyc
+
+# Data — ignore everything except the final output
+python_code/data/raw_data/
+python_code/data/cleaned_data/*
+!python_code/data/cleaned_data/final_departures.csv
+
