@@ -45,3 +45,4 @@ boxplot(delay_minutes ~ Transportslag, data = df,
         main = "Försening i rusningstrafik: Buss 64 vs Spårvagn 6",
         ylab = "Försening (minuter)", 
         col = c("lightblue", "lightgreen"))
+
